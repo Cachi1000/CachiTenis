@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
-    "start": "concurrently \"vite --host\" \"node server.js\"",
+    "dev": "concurrently \"vite --host\" \"node server.js\"",
+    "start": "node server.js",
     "build": "vite build",
+    "postinstall": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
