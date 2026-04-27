@@ -9,11 +9,28 @@ import LiveMatchViewer from './components/LiveMatchViewer';
 import { History as HistoryIcon, Radio } from 'lucide-react';
 import { io } from 'socket.io-client';
 
+const APP_VERSION = 'v1.1.0';
+
 function App() {
   const [currentView, setCurrentView] = useState('SETUP'); // SETUP, MATCH, STATS, HISTORY, LIVE_WATCH
   const [matchState, setMatchState] = useState(null);
   const [socket, setSocket] = useState(null);
   const [liveCode, setLiveCode] = useState(null);
+
+  const forceUpdate = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister()
+        }
+      });
+    }
+    caches.keys().then((keyList) => {
+      return Promise.all(keyList.map((key) => caches.delete(key)))
+    }).then(() => {
+      window.location.reload(true);
+    });
+  };
 
   const startMatch = (config) => {
     const newState = createMatchState(config);
@@ -104,9 +121,15 @@ function App() {
   return (
     <>
       <header className="app-header">
-        <div className="app-title">
+        <div className="app-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Activity size={24} color="var(--primary)" />
-          Cachi Tenis Pro
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+            <span>Cachi Tenis Pro</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem' }} onClick={forceUpdate}>
+              Versión {APP_VERSION} 
+              <span style={{ color: 'var(--primary)', textDecoration: 'underline' }}>(Forzar actualización)</span>
+            </span>
+          </div>
         </div>
         <div>
           {currentView === 'SETUP' && (
