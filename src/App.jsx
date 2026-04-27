@@ -106,7 +106,7 @@ function App() {
       <header className="app-header">
         <div className="app-title">
           <Activity size={24} color="var(--primary)" />
-          Tennis Math Pro
+          Cachi Tenis Pro
         </div>
         <div>
           {currentView === 'SETUP' && (

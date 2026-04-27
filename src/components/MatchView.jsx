@@ -44,37 +44,37 @@ const MatchView = ({ state, onAction, onFinish, readOnly = false, liveCode = nul
     }
     
     return (
-      <div className="card" style={{ padding: '1rem', borderTop: isServing ? '4px solid var(--accent)' : '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ margin: 0 }}>{displayName}</h3>
-          {isServing && <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--accent)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '1rem', fontWeight: 'bold' }}>SERVING</span>}
+      <div className="card" style={{ padding: '0.5rem', borderTop: isServing ? '4px solid var(--accent)' : '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <h4 style={{ margin: 0, textAlign: 'center', fontSize: '0.9rem', lineHeight: '1.2' }}>{displayName}</h4>
+          {isServing && <span style={{ fontSize: '0.65rem', backgroundColor: 'var(--accent)', color: 'white', padding: '0.1rem 0.4rem', borderRadius: '1rem', fontWeight: 'bold', marginTop: '0.2rem' }}>SERVING</span>}
         </div>
         
         {isServing && (
-          <div className="action-grid" style={{ marginBottom: '1rem' }}>
-            <button className="action-btn serve" onClick={() => onAction('ACE', playerId)}>
-              <PlayCircle className="icon" />
-              <span>Ace</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.4rem' }}>
+            <button className="action-btn serve" style={{ padding: '0.5rem', gap: '0.25rem', minHeight: '50px' }} onClick={() => onAction('ACE', playerId)}>
+              <PlayCircle className="icon" size={18} style={{ margin: 0 }} />
+              <span style={{ fontSize: '0.75rem' }}>Ace</span>
             </button>
-            <button className="action-btn error" onClick={() => onAction('FAULT', playerId)}>
-              <AlertTriangle className="icon" style={{ color: 'var(--danger)' }} />
-              <span>{firstServeFault ? 'Double Fault' : 'Fault'}</span>
+            <button className="action-btn error" style={{ padding: '0.5rem', gap: '0.25rem', minHeight: '50px' }} onClick={() => onAction('FAULT', playerId)}>
+              <AlertTriangle className="icon" size={18} style={{ color: 'var(--danger)', margin: 0 }} />
+              <span style={{ fontSize: '0.75rem' }}>{firstServeFault ? 'Double Fault' : 'Fault'}</span>
             </button>
           </div>
         )}
         
-        <div className="action-grid">
-          <button className="action-btn winner" onClick={() => onAction('WINNER', playerId)} style={{ gridColumn: 'span 2' }}>
-            <Crosshair className="icon" />
-            <span>Winner</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <button className="action-btn winner" style={{ padding: '0.5rem', gap: '0.25rem', minHeight: '50px' }} onClick={() => onAction('WINNER', playerId)}>
+            <Crosshair className="icon" size={18} style={{ margin: 0 }} />
+            <span style={{ fontSize: '0.75rem' }}>Winner</span>
           </button>
-          <button className="action-btn error" onClick={() => onAction('UNFORCED_ERROR', playerId)}>
-            <XCircle className="icon" style={{ color: 'var(--danger)' }} />
-            <span>Unforced Error</span>
+          <button className="action-btn error" style={{ padding: '0.5rem', gap: '0.25rem', minHeight: '50px' }} onClick={() => onAction('UNFORCED_ERROR', playerId)}>
+            <XCircle className="icon" size={18} style={{ color: 'var(--danger)', margin: 0 }} />
+            <span style={{ fontSize: '0.75rem' }}>Unforced Error</span>
           </button>
-          <button className="action-btn error" onClick={() => onAction('FORCED_ERROR', playerId)}>
-            <AlertTriangle className="icon" style={{ color: 'var(--warning)' }} />
-            <span>Forced Error</span>
+          <button className="action-btn error" style={{ padding: '0.5rem', gap: '0.25rem', minHeight: '50px' }} onClick={() => onAction('FORCED_ERROR', playerId)}>
+            <AlertTriangle className="icon" size={18} style={{ color: 'var(--warning)', margin: 0 }} />
+            <span style={{ fontSize: '0.75rem' }}>Forced Error</span>
           </button>
         </div>
       </div>
@@ -134,7 +134,7 @@ const MatchView = ({ state, onAction, onFinish, readOnly = false, liveCode = nul
       </div>
 
       {!readOnly && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '5rem' }}>
           <PlayerActions playerId={1} />
           <PlayerActions playerId={2} />
         </div>
