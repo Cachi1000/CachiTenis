@@ -64,7 +64,10 @@ const MatchView = ({ state, onAction, onFinish, readOnly = false, liveCode = nul
         <button 
           className="action-btn" 
           style={{ padding: '1.5rem', fontSize: '1.2rem', minHeight: '120px', backgroundColor: '#2ca0d9', color: 'white' }} 
-          onClick={() => setActiveTab('POINT')}
+          onClick={() => {
+            onAction('START_POINT', null);
+            setActiveTab('POINT');
+          }}
         >
           Ball In Play
         </button>

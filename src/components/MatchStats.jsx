@@ -1,136 +1,279 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Clock, BarChart2, List, TrendingUp } from 'lucide-react';
 
 const MatchStats = ({ state }) => {
-  const { config, stats, sets } = state;
+  const { config, stats, sets, pointLog } = state;
+  const [activeTab, setActiveTab] = useState('ESSENTIAL');
+
+  const formatTime = (ms) => {
+    if (!ms) return '00:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const formatRallyTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}'${secs.toString().padStart(2, '0')}`;
+  };
 
   const getPercentage = (part, total) => {
-    if (total === 0) return '0%';
+    if (!total || total === 0) return '0%';
     return `${Math.round((part / total) * 100)}%`;
   };
 
-  const getTeamStats = (p1, p2) => {
-    if (!config.isDoubles) return p1;
-    return {
-      aces: p1.aces + p2.aces,
-      doubleFaults: p1.doubleFaults + p2.doubleFaults,
-      firstServesIn: p1.firstServesIn + p2.firstServesIn,
-      firstServesTotal: p1.firstServesTotal + p2.firstServesTotal,
-      winners: p1.winners + p2.winners,
-      unforcedErrors: p1.unforcedErrors + p2.unforcedErrors,
-      forcedErrors: p1.forcedErrors + p2.forcedErrors,
-      pointsWon: p1.pointsWon // Already represents team points
+  const calculateExtendedStats = (teamId) => {
+    const playerIds = teamId === 1 ? [1, 3] : [2, 4];
+    const teamStats = {
+      aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0,
+      firstServesIn: 0, firstServesTotal: 0, secondServesIn: 0, secondServesTotal: 0,
+      pointsWon: 0, breakPointsWon: 0, breakPointsTotal: 0, rallyTimes: []
     };
-  };
 
-  const t1Stats = getTeamStats(stats.player1, stats.player3);
-  const t2Stats = getTeamStats(stats.player2, stats.player4);
+    playerIds.forEach(id => {
+      const p = stats[`player${id}`];
+      if (!p) return;
+      teamStats.aces += p.aces || 0;
+      teamStats.doubleFaults += p.doubleFaults || 0;
+      teamStats.winners += p.winners || 0;
+      teamStats.unforcedErrors += p.unforcedErrors || 0;
+      teamStats.forcedErrors += p.forcedErrors || 0;
+      teamStats.firstServesIn += p.firstServesIn || 0;
+      teamStats.firstServesTotal += p.firstServesTotal || 0;
+      teamStats.secondServesIn += p.secondServesIn || 0;
+      teamStats.secondServesTotal += p.secondServesTotal || 0;
+      teamStats.pointsWon += p.pointsWon || 0;
+      teamStats.breakPointsWon += p.breakPointsWon || 0;
+      teamStats.breakPointsTotal += p.breakPointsTotal || 0;
+      teamStats.rallyTimes = [...teamStats.rallyTimes, ...(p.rallyTimes || [])];
+    });
 
-  const StatRow = ({ label, val1, val2, highlightHighest }) => {
-    const v1Num = parseFloat(val1) || 0;
-    const v2Num = parseFloat(val2) || 0;
+    // Calculated fields
+    teamStats.aggressiveMargin = teamStats.winners - teamStats.unforcedErrors;
     
-    let w1 = 'normal';
-    let w2 = 'normal';
-    let c1 = 'var(--text-main)';
-    let c2 = 'var(--text-main)';
+    // Receiving points
+    const oppTeamId = teamId === 1 ? 2 : 1;
+    const receivingPoints = pointLog.filter(p => {
+       const serverTeam = (p.serverId === 1 || p.serverId === 3) ? 1 : 2;
+       return serverTeam === oppTeamId;
+    });
+    teamStats.receivingPointsTotal = receivingPoints.length;
+    teamStats.receivingPointsWon = receivingPoints.filter(p => p.winner === teamId).length;
 
-    if (highlightHighest) {
-      if (v1Num > v2Num) { w1 = 'bold'; c1 = 'var(--primary)'; }
-      if (v2Num > v1Num) { w2 = 'bold'; c2 = 'var(--primary)'; }
-    }
-
-    return (
-      <tr>
-        <td style={{ fontWeight: w1, color: c1, width: '25%', textAlign: 'center' }}>{val1}</td>
-        <td style={{ width: '50%' }}>{label}</td>
-        <td style={{ fontWeight: w2, color: c2, width: '25%', textAlign: 'center' }}>{val2}</td>
-      </tr>
-    );
+    // Service points won
+    const servicePoints = pointLog.filter(p => {
+       const serverTeam = (p.serverId === 1 || p.serverId === 3) ? 1 : 2;
+       return serverTeam === teamId;
+    });
+    
+    const firstServePoints = servicePoints.filter(p => p.reason !== 'DOUBLE_FAULT' && !p.isSecondServe); // Simple check, might need better logic if we tracked 1st/2nd serve explicitly in log
+    // Actually, let's just use the stats we have
+    // We need 1st service points won. Let's assume we track it in the log.
+    // For now, let's estimate or add it to tennisLogic.
+    
+    return teamStats;
   };
 
-  const StatsTable = ({ s1, s2, title, hidePoints }) => (
-    <div style={{ marginBottom: '2rem' }}>
-      {title && <h3 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--text-muted)' }}>{title}</h3>}
-      <div style={{ overflowX: 'auto' }}>
-        <table className="stats-table">
-          <tbody>
-            <StatRow label="Aces" val1={s1.aces} val2={s2.aces} highlightHighest={true} />
-            <StatRow label="Double Faults" val1={s1.doubleFaults} val2={s2.doubleFaults} highlightHighest={false} />
-            <StatRow 
-              label="1st Serve %" 
-              val1={`${s1.firstServesIn}/${s1.firstServesTotal} (${getPercentage(s1.firstServesIn, s1.firstServesTotal)})`} 
-              val2={`${s2.firstServesIn}/${s2.firstServesTotal} (${getPercentage(s2.firstServesIn, s2.firstServesTotal)})`} 
-            />
-            <StatRow label="Winners" val1={s1.winners} val2={s2.winners} highlightHighest={true} />
-            <StatRow label="Unforced Errors" val1={s1.unforcedErrors} val2={s2.unforcedErrors} highlightHighest={false} />
-            <StatRow label="Forced Errors" val1={s1.forcedErrors} val2={s2.forcedErrors} highlightHighest={false} />
-            {!hidePoints && <StatRow label="Total Points Won" val1={s1.pointsWon} val2={s2.pointsWon} highlightHighest={true} />}
-          </tbody>
-        </table>
-      </div>
+  const t1 = calculateExtendedStats(1);
+  const t2 = calculateExtendedStats(2);
+
+  const StatHeader = ({ label }) => (
+    <div style={{ backgroundColor: '#f0f0f0', padding: '0.5rem 1rem', fontWeight: 'bold', fontSize: '0.9rem', color: '#333', borderBottom: '1px solid #ddd' }}>
+      {label}
     </div>
   );
 
+  const StatLine = ({ label, v1, v2, isBold1, isBold2 }) => (
+    <div style={{ display: 'flex', padding: '0.75rem 1rem', borderBottom: '1px solid #eee', alignItems: 'center' }}>
+      <div style={{ flex: 1, textAlign: 'left', color: '#666' }}>{label}</div>
+      <div style={{ width: '60px', textAlign: 'center', fontWeight: isBold1 ? 'bold' : 'normal' }}>{v1}</div>
+      <div style={{ width: '60px', textAlign: 'center', fontWeight: isBold2 ? 'bold' : 'normal' }}>{v2}</div>
+    </div>
+  );
+
+  const EssentialTab = () => {
+    const v1 = t1.firstServesTotal > 0 ? (t1.firstServesIn / t1.firstServesTotal) : 0;
+    const v2 = t2.firstServesTotal > 0 ? (t2.firstServesIn / t2.firstServesTotal) : 0;
+    const r1 = t1.receivingPointsTotal > 0 ? (t1.receivingPointsWon / t1.receivingPointsTotal) : 0;
+    const r2 = t2.receivingPointsTotal > 0 ? (t2.receivingPointsWon / t2.receivingPointsTotal) : 0;
+
+    return (
+      <div style={{ backgroundColor: 'white' }}>
+        <StatHeader label="Service" />
+        <StatLine label="% 1st service" v1={getPercentage(t1.firstServesIn, t1.firstServesTotal)} v2={getPercentage(t2.firstServesIn, t2.firstServesTotal)} isBold1={v1 > v2} isBold2={v2 > v1} />
+        <StatLine label="Aces" v1={t1.aces} v2={t2.aces} isBold1={t1.aces > t2.aces} isBold2={t2.aces > t1.aces} />
+        <StatLine label="Double faults" v1={t1.doubleFaults} v2={t2.doubleFaults} isBold1={t1.doubleFaults < t2.doubleFaults} isBold2={t2.doubleFaults < t1.doubleFaults} />
+        
+        <StatHeader label="Points" />
+        <StatLine label="Total points won" v1={t1.pointsWon} v2={t2.pointsWon} isBold1={t1.pointsWon > t2.pointsWon} isBold2={t2.pointsWon > t1.pointsWon} />
+        <StatLine label="Winners" v1={t1.winners} v2={t2.winners} isBold1={t1.winners > t2.winners} isBold2={t2.winners > t1.winners} />
+        <StatLine label="Unforced errors" v1={t1.unforcedErrors} v2={t2.unforcedErrors} isBold1={t1.unforcedErrors < t2.unforcedErrors} isBold2={t2.unforcedErrors < t1.unforcedErrors} />
+        <StatLine label="Aggressive margin" v1={t1.aggressiveMargin} v2={t2.aggressiveMargin} isBold1={t1.aggressiveMargin > t2.aggressiveMargin} isBold2={t2.aggressiveMargin > t1.aggressiveMargin} />
+        
+        <StatHeader label="Conversion" />
+        <StatLine label="Receiving pts won" v1={getPercentage(t1.receivingPointsWon, t1.receivingPointsTotal)} v2={getPercentage(t2.receivingPointsWon, t2.receivingPointsTotal)} isBold1={r1 > r2} isBold2={r2 > r1} />
+        <StatLine label="Break points" v1={`${t1.breakPointsWon}/${t1.breakPointsTotal}`} v2={`${t2.breakPointsWon}/${t2.breakPointsTotal}`} isBold1={t1.breakPointsWon > t2.breakPointsWon} isBold2={t2.breakPointsWon > t1.breakPointsWon} />
+      </div>
+    );
+  };
+
+  const DetailedTab = () => {
+    const getRallyDist = (times) => {
+      return {
+        avg: times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0,
+        longest: times.length ? Math.max(...times) : 0,
+        cat1: times.filter(t => t <= 3).length,
+        cat2: times.filter(t => t > 3 && t <= 10).length,
+        cat3: times.filter(t => t > 10 && t <= 20).length,
+        cat4: times.filter(t => t > 20).length
+      };
+    };
+
+    const d1 = getRallyDist(t1.rallyTimes);
+    const d2 = getRallyDist(t2.rallyTimes);
+
+    return (
+      <div style={{ backgroundColor: 'white' }}>
+        <StatHeader label="Service" />
+        <StatLine label="Total services" v1={t1.firstServesTotal + t1.secondServesTotal} v2={t2.firstServesTotal + t2.secondServesTotal} />
+        <StatLine label="% 1st service" v1={getPercentage(t1.firstServesIn, t1.firstServesTotal)} v2={getPercentage(t2.firstServesIn, t2.firstServesTotal)} />
+        <StatLine label="Aces" v1={t1.aces} v2={t2.aces} />
+        <StatLine label="Double faults" v1={t1.doubleFaults} v2={t2.doubleFaults} />
+        <StatLine label="1st services" v1={t1.firstServesIn} v2={t2.firstServesIn} />
+        <StatLine label="2nd services" v1={t1.secondServesIn} v2={t2.secondServesIn} />
+        
+        <StatHeader label="Points" />
+        <StatLine label="Total points won" v1={t1.pointsWon} v2={t2.pointsWon} />
+        <StatLine label="Winners" v1={t1.winners} v2={t2.winners} />
+        <StatLine label="Unforced errors" v1={t1.unforcedErrors} v2={t2.unforcedErrors} />
+        <StatLine label="Forced errors" v1={t1.forcedErrors} v2={t2.forcedErrors} />
+        <StatLine label="Aggressive margin" v1={t1.aggressiveMargin} v2={t2.aggressiveMargin} />
+        
+        <StatHeader label="Won rallies (by time)" />
+        <StatLine label="Average" v1={formatRallyTime(d1.avg)} v2={formatRallyTime(d2.avg)} />
+        <StatLine label="Longest" v1={formatRallyTime(d1.longest)} v2={formatRallyTime(d2.longest)} />
+        <StatLine label='0">3"' v1={d1.cat1} v2={d2.cat1} />
+        <StatLine label='0">10"' v1={d1.cat2} v2={d2.cat2} />
+        <StatLine label='10">20"' v1={d1.cat3} v2={d2.cat3} />
+        <StatLine label='>20"' v1={d1.cat4} v2={d2.cat4} />
+      </div>
+    );
+  };
+
+  const ScoreLogTab = () => {
+    // Group point log by set and game
+    const setsLog = [];
+    pointLog.forEach(p => {
+      if (!setsLog[p.set]) setsLog[p.set] = [];
+      if (!setsLog[p.set][p.game]) setsLog[p.set][p.game] = { points: [], server: p.serverId };
+      setsLog[p.set][p.game].points.push(p);
+    });
+
+    const getDisplayPoint = (score, isTB) => {
+      if (isTB) return score;
+      const map = { 0: '0', 1: '15', 2: '30', 3: '40', 4: 'Ad' };
+      return map[score] || score;
+    };
+
+    return (
+      <div style={{ backgroundColor: 'white', padding: '1rem' }}>
+        {setsLog.map((set, setIdx) => (
+          <div key={setIdx} style={{ marginBottom: '2rem' }}>
+            <h2 style={{ borderBottom: '2px solid #333', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Set #{setIdx + 1}</h2>
+            {set.map((game, gameIdx) => {
+              const serverName = config[`player${game.server}Name`];
+              const scoreAtStart = game.points[0].scoreBefore;
+              return (
+                <div key={gameIdx} style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ color: '#666', marginBottom: '0.5rem' }}>Game #{gameIdx + 1}: {scoreAtStart.player1}-{scoreAtStart.player2}</h4>
+                  <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>{serverName} is serving</div>
+                  {game.points.map((p, pIdx) => {
+                    const winnerName = config[`player${p.winner === 1 ? 1 : 2}Name`];
+                    const winnerColor = p.winner === 1 ? '#3498db' : '#f1c40f';
+                    const scoreStr = `${getDisplayPoint(p.scoreBefore.player1, p.isTiebreak)}:${getDisplayPoint(p.scoreBefore.player2, p.isTiebreak)}`;
+                    return (
+                      <div key={pIdx} style={{ display: 'flex', gap: '0.5rem', fontSize: '0.9rem', marginBottom: '0.2rem', alignItems: 'center' }}>
+                         <span style={{ color: '#999', width: '40px' }}>{scoreStr}</span>
+                         <span style={{ color: winnerColor }}>●</span>
+                         <span style={{ backgroundColor: winnerColor + '33', padding: '0 4px', borderRadius: '2px' }}>{winnerName}</span>
+                         <span style={{ color: '#666' }}>{p.reason.toLowerCase().replace('_', ' ')}</span>
+                      </div>
+                    );
+                  })}
+                  <div style={{ fontWeight: 'bold', marginTop: '0.5rem' }}>{config[`player${game.points[game.points.length-1].winner === 1 ? 1 : 2}Name`]} wins the game</div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const matchDuration = sets.reduce((acc, s) => {
+    if (s.startTime && s.endTime) return acc + (s.endTime - s.startTime);
+    if (s.startTime && !s.endTime) return acc + (Date.now() - s.startTime);
+    return acc;
+  }, 0);
+
   return (
-    <div className="card">
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <h2>Match Statistics</h2>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', fontSize: '1.25rem', fontWeight: 'bold', flexWrap: 'wrap' }}>
-          <span style={{ color: 'var(--primary)', textAlign: 'right' }}>
-            {config.player1Name} {config.isDoubles && <><br/><span style={{fontSize: '0.9rem'}}>& {config.player3Name}</span></>}
-          </span>
-          <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>vs</span>
-          <span style={{ color: 'var(--secondary)', textAlign: 'left' }}>
-            {config.player2Name} {config.isDoubles && <><br/><span style={{fontSize: '0.9rem'}}>& {config.player4Name}</span></>}
-          </span>
+    <div style={{ backgroundColor: '#f5f5f5', minHeight: '100vh', margin: '-1rem' }}>
+      {/* Header Summary */}
+      <div style={{ backgroundColor: 'var(--primary)', color: 'white', padding: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <button onClick={() => window.history.back()} style={{ background: 'none', border: 'none', color: 'white' }}>
+          <BarChart2 />
+        </button>
+        <h1 style={{ fontSize: '1.2rem', margin: 0 }}>Statistics</h1>
+      </div>
+
+      <div style={{ backgroundColor: 'white', padding: '1rem', borderBottom: '1px solid #ddd' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem' }}>
+          <span>Elapsed time ∞</span>
+          <span>∞'</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem' }}>
+          <span>{config.player1Name} {config.isDoubles && `& ${config.player3Name}`}</span>
+          <span>{sets.reduce((acc, s) => acc + (s.player1 > s.player2 ? 1 : 0), 0)}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem' }}>
+          <span>{config.player2Name} {config.isDoubles && `& ${config.player4Name}`}</span>
+          <span>{sets.reduce((acc, s) => acc + (s.player2 > s.player1 ? 1 : 0), 0)}</span>
         </div>
       </div>
 
-      <div className="scoreboard" style={{ marginBottom: '2rem' }}>
-        <div className="scoreboard-row">
-          <div className="player-info">
-            <div className="player-name">
-              {config.player1Name}
-              {config.isDoubles && <><br/><span style={{fontSize: '0.8rem', fontWeight: 'normal'}}>{config.player3Name}</span></>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            {sets.map((set, i) => <div key={i} className="score-box" style={{ marginRight: '0.25rem' }}>{set.player1}</div>)}
-          </div>
-        </div>
-        <div className="scoreboard-row">
-          <div className="player-info">
-            <div className="player-name">
-              {config.player2Name}
-              {config.isDoubles && <><br/><span style={{fontSize: '0.8rem', fontWeight: 'normal'}}>{config.player4Name}</span></>}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            {sets.map((set, i) => <div key={i} className="score-box" style={{ marginRight: '0.25rem' }}>{set.player2}</div>)}
-          </div>
-        </div>
+      {/* Tabs */}
+      <div style={{ display: 'flex', backgroundColor: 'white', borderBottom: '2px solid #ddd' }}>
+        {['ESSENTIAL', 'DETAILED', 'SCORE LOG'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              flex: 1,
+              padding: '1rem 0.5rem',
+              border: 'none',
+              background: 'none',
+              fontWeight: 'bold',
+              color: activeTab === tab ? '#3498db' : '#888',
+              borderBottom: activeTab === tab ? '3px solid #3498db' : '3px solid transparent',
+              transition: 'all 0.2s'
+            }}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
-      <StatsTable s1={t1Stats} s2={t2Stats} title={config.isDoubles ? "Team Statistics" : null} />
-      
-      {config.isDoubles && (
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
-          <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>Individual Statistics</h2>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 'bold', padding: '0 1rem' }}>
-            <span style={{ color: 'var(--primary)' }}>{config.player1Name}</span>
-            <span style={{ color: 'var(--secondary)' }}>{config.player2Name}</span>
-          </div>
-          <StatsTable s1={stats.player1} s2={stats.player2} hidePoints={true} />
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 'bold', padding: '0 1rem', marginTop: '1rem' }}>
-            <span style={{ color: 'var(--primary)' }}>{config.player3Name}</span>
-            <span style={{ color: 'var(--secondary)' }}>{config.player4Name}</span>
-          </div>
-          <StatsTable s1={stats.player3} s2={stats.player4} hidePoints={true} />
-        </div>
-      )}
+      {/* Content */}
+      <div style={{ paddingBottom: '2rem' }}>
+        {activeTab === 'ESSENTIAL' && <EssentialTab />}
+        {activeTab === 'DETAILED' && <DetailedTab />}
+        {activeTab === 'SCORE LOG' && <ScoreLogTab />}
+      </div>
     </div>
   );
 };
 
 export default MatchStats;
+

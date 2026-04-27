@@ -47,7 +47,7 @@ export const createMatchState = (config) => {
     status: "IN_PROGRESS", // IN_PROGRESS, COMPLETED
     winner: null, // Will be 1 (Team 1) or 2 (Team 2)
     currentSet: 0,
-    sets: [{ player1: 0, player2: 0 }],
+    sets: [{ player1: 0, player2: 0, startTime: Date.now(), endTime: null }],
     currentGame: {
       player1: 0,
       player2: 0,
@@ -58,11 +58,14 @@ export const createMatchState = (config) => {
     serverIndex: 0,
     server: serverSequence[0],
     firstServeFault: false,
+    startTime: Date.now(),
+    lastPointEndTime: Date.now(),
+    pointLog: [], // Detailed log of every point
     stats: {
-      player1: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0 },
-      player2: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0 },
-      player3: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0 },
-      player4: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0 },
+      player1: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0, breakPointsWon: 0, breakPointsTotal: 0, rallyTimes: [] },
+      player2: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0, breakPointsWon: 0, breakPointsTotal: 0, rallyTimes: [] },
+      player3: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0, breakPointsWon: 0, breakPointsTotal: 0, rallyTimes: [] },
+      player4: { aces: 0, doubleFaults: 0, winners: 0, unforcedErrors: 0, forcedErrors: 0, firstServesTotal: 0, firstServesIn: 0, secondServesTotal: 0, secondServesIn: 0, pointsWon: 0, breakPointsWon: 0, breakPointsTotal: 0, rallyTimes: [] },
     },
     history: [], // For undo functionality
   };
@@ -93,6 +96,12 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
 
   const state = cloneState(currentState);
   
+  // Handle specific actions if they are not points
+  if (actionPlayerId === 'START_POINT') {
+    state.lastPointEndTime = Date.now();
+    return state;
+  }
+
   const actionTeamId = (actionPlayerId === 1 || actionPlayerId === 3) ? 1 : 2;
   const oppTeamId = actionTeamId === 1 ? 2 : 1;
   
@@ -106,6 +115,36 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
 
   const pId = `player${actionPlayerId}`;
   const serverId = `player${state.server}`;
+  const serverTeamId = (state.server === 1 || state.server === 3) ? 1 : 2;
+
+  // Calculate rally duration
+  const now = Date.now();
+  const rallyDuration = Math.round((now - state.lastPointEndTime) / 1000);
+  state.lastPointEndTime = now;
+
+  // Check if it's a break point BEFORE adding the point
+  const isTiebreak = state.currentGame.isTiebreak || state.currentGame.isSuperTiebreak;
+  let isBreakPoint = false;
+  if (!isTiebreak) {
+    const serverScore = state.currentGame[`player${serverTeamId}`];
+    const receiverScore = state.currentGame[`player${oppTeamId}`];
+    // Receiver has a break point if they are one point away from winning the game
+    // and the server is NOT one point away (or it's Deuce/Ad-In)
+    if (state.config.gameFormat === GAME_FORMATS.NO_AD) {
+      if (receiverScore === 3) isBreakPoint = true;
+    } else {
+      if (receiverScore >= 3 && (receiverScore - serverScore >= 1)) isBreakPoint = true;
+      if (receiverScore === 3 && serverScore < 3) isBreakPoint = true;
+    }
+  }
+
+  if (isBreakPoint) {
+    state.stats[`player${oppTeamId}`].breakPointsTotal += 1;
+    if (state.config.isDoubles) {
+       state.stats[`player${oppTeamId === 1 ? 1 : 2}`].breakPointsTotal += 0; // Already added to team
+       // We'll handle team stats calculation in the view, but let's store it consistently.
+    }
+  }
 
   // Save to history before modifying
   const historySnapshot = cloneState(currentState);
@@ -143,21 +182,33 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
     }
   }
 
-  state.stats[`player${pointWinnerTeamId}`].pointsWon += 1;
-  if (state.config.isDoubles) {
-    state.stats[`player${pointWinnerTeamId === 1 ? 3 : 4}`].pointsWon += 1;
+  if (isBreakPoint && pointWinnerTeamId === oppTeamId) {
+    state.stats[`player${oppTeamId}`].breakPointsWon += 1;
   }
+
+  state.stats[`player${pointWinnerTeamId}`].pointsWon += 1;
+  state.stats[`player${pointWinnerTeamId}`].rallyTimes.push(rallyDuration);
+
+  // Log point
+  state.pointLog.push({
+    set: state.currentSet,
+    game: state.sets[state.currentSet].player1 + state.sets[state.currentSet].player2,
+    scoreBefore: { player1: state.currentGame.player1, player2: state.currentGame.player2 },
+    winner: pointWinnerTeamId,
+    reason,
+    serverId: state.server,
+    duration: rallyDuration,
+    isTiebreak
+  });
 
   // Score Logic
   const game = state.currentGame;
-  const isTiebreak = game.isTiebreak;
-  const isSuperTiebreak = game.isSuperTiebreak;
 
   game[`player${pointWinnerTeamId}`] += 1;
 
   let gameWon = false;
 
-  if (isSuperTiebreak) {
+  if (game.isSuperTiebreak) {
     const pointsToWin =
       state.config.format === MATCH_FORMATS.CUSTOM &&
       state.config.customRules?.superTiebreakPoints
@@ -176,7 +227,7 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
         state.server = state.serverSequence[state.serverIndex];
       }
     }
-  } else if (isTiebreak) {
+  } else if (game.isTiebreak) {
     const pointsToWin =
       state.config.format === MATCH_FORMATS.CUSTOM &&
       state.config.customRules?.tiebreakPoints
@@ -296,6 +347,9 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
     }
 
     if (setWon) {
+      // Record set end time
+      state.sets[state.currentSet].endTime = Date.now();
+
       // Check Match Won
       const setsWon = { player1: 0, player2: 0 };
       state.sets.forEach((s) => {
@@ -334,7 +388,7 @@ export const addPoint = (currentState, actionPlayerId, reason, isFirstServe) => 
       } else {
         // Next Set
         state.currentSet += 1;
-        state.sets.push({ player1: 0, player2: 0 });
+        state.sets.push({ player1: 0, player2: 0, startTime: Date.now(), endTime: null });
 
         if (format.startsWith("TIEBREAKS_ONLY")) {
           state.currentGame.isTiebreak = true;

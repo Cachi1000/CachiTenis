@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { History, Trash2, Trophy, Plus } from 'lucide-react';
+import { History, Trash2, Trophy, Plus, Calendar, Clock, Map } from 'lucide-react';
 
-const MatchHistory = ({ onBack }) => {
+const MatchHistory = ({ onViewStats }) => {
   const [matches, setMatches] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualData, setManualData] = useState({
@@ -9,7 +9,8 @@ const MatchHistory = ({ onBack }) => {
     player2Name: '',
     date: new Date().toISOString().split('T')[0],
     scores: '', // e.g. "6-4 6-2"
-    winner: 1
+    winner: 1,
+    surface: 'Clay'
   });
 
   useEffect(() => {
@@ -43,7 +44,6 @@ const MatchHistory = ({ onBack }) => {
     e.preventDefault();
     if (!manualData.player1Name || !manualData.player2Name || !manualData.scores) return;
 
-    // Parse scores: "6-4 6-2" -> sets: [{player1: 6, player2: 4}, {player1: 6, player2: 2}]
     const sets = manualData.scores.split(' ').map(s => {
       const parts = s.split('-');
       if (parts.length === 2) {
@@ -56,12 +56,17 @@ const MatchHistory = ({ onBack }) => {
       config: {
         player1Name: manualData.player1Name,
         player2Name: manualData.player2Name,
-        isDoubles: false
+        isDoubles: false,
+        surface: manualData.surface
       },
       sets,
       winner: parseInt(manualData.winner),
       date: new Date(manualData.date).toISOString(),
-      stats: null,
+      stats: {
+         player1: { winners: 0, unforcedErrors: 0, pointsWon: 0 },
+         player2: { winners: 0, unforcedErrors: 0, pointsWon: 0 }
+      },
+      pointLog: [],
       status: 'COMPLETED'
     };
 
@@ -70,118 +75,127 @@ const MatchHistory = ({ onBack }) => {
     setMatches(newMatches);
     setShowManualForm(false);
     setManualData({
-      player1Name: '', player2Name: '', date: new Date().toISOString().split('T')[0], scores: '', winner: 1
+      player1Name: '', player2Name: '', date: new Date().toISOString().split('T')[0], scores: '', winner: 1, surface: 'Clay'
     });
   };
 
+  const formatDuration = (sets) => {
+    const ms = sets.reduce((acc, s) => {
+      if (s.startTime && s.endTime) return acc + (s.endTime - s.startTime);
+      return acc;
+    }, 0);
+    if (!ms) return '0h0m';
+    const totalMinutes = Math.floor(ms / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h${minutes}m`;
+  };
+
+  const MatchCard = ({ match, index }) => {
+    const { config, sets, winner, date } = match;
+    const matchDate = new Date(date).toLocaleDateString('es-ES', { day: 'numeric', month: 'numeric', year: '2-digit' });
+    const duration = formatDuration(sets);
+    const surface = config.surface || 'Clay';
+
+    const scoreString = sets.map(s => `${s.player1}-${s.player2}`).join(' ');
+
+    return (
+      <div className="card" style={{ backgroundColor: '#fcfcfc', border: '1px solid #eee', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-1rem', marginRight: '-1rem' }}>
+          <button onClick={() => deleteMatch(index)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer' }}>
+            <Trash2 size={16} />
+          </button>
+        </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '3rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+             <div style={{ width: '60px', height: '60px', backgroundColor: '#e67e22', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                <Trophy size={32} color="white" />
+             </div>
+             <span style={{ color: '#3498db', fontWeight: '500' }}>{config.player1Name}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', color: '#ccc' }}>-</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+             <div style={{ width: '60px', height: '60px', backgroundColor: '#3498db', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                <Trophy size={32} color="white" />
+             </div>
+             <span style={{ color: '#3498db', fontWeight: '500' }}>{config.player2Name}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem', color: '#888', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <Calendar size={14} /> {matchDate}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <Clock size={14} /> {duration}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <Map size={14} /> {surface}
+          </div>
+        </div>
+
+        <div style={{ display: 'inline-block', padding: '0.5rem 1rem', border: '1px solid #ddd', borderRadius: '4px', marginBottom: '1.5rem', fontWeight: 'bold' }}>
+          {scoreString}
+        </div>
+
+        <button 
+          className="btn" 
+          onClick={() => onViewStats(match)}
+          style={{ width: '100%', backgroundColor: '#3498db', color: 'white', padding: '0.75rem', fontSize: '1rem', marginBottom: '0.5rem' }}
+        >
+          Detailed statistics report
+        </button>
+      </div>
+    );
+  };
+
   return (
-    <div className="card">
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2>Match History</h2>
+        <h2 style={{ margin: 0 }}>Match History</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" onClick={() => setShowManualForm(!showManualForm)} style={{ padding: '0.5rem' }}>
-            <Plus size={20} /> Add Past Match
+          <button className="btn btn-secondary" onClick={() => setShowManualForm(!showManualForm)}>
+            <Plus size={18} /> Add
           </button>
-          <button className="btn btn-ghost" onClick={clearHistory} style={{ color: 'var(--danger)', padding: '0.5rem' }}>
-            <Trash2 size={20} /> Clear All
-          </button>
+          {matches.length > 0 && (
+            <button className="btn btn-ghost" onClick={clearHistory} style={{ color: 'var(--danger)' }}>
+              <Trash2 size={18} />
+            </button>
+          )}
         </div>
       </div>
 
       {showManualForm && (
-        <form onSubmit={saveManualMatch} className="card" style={{ backgroundColor: 'var(--bg-dark)', marginBottom: '1.5rem', border: '1px dashed var(--border)' }}>
+        <form onSubmit={saveManualMatch} className="card" style={{ marginBottom: '2rem' }}>
           <h3 style={{ marginBottom: '1rem' }}>Log Past Match</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label>Player 1 (or Team 1)</label>
-              <input value={manualData.player1Name} onChange={e => setManualData({...manualData, player1Name: e.target.value})} placeholder="Federer" required />
-            </div>
-            <div>
-              <label>Player 2 (or Team 2)</label>
-              <input value={manualData.player2Name} onChange={e => setManualData({...manualData, player2Name: e.target.value})} placeholder="Nadal" required />
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <input value={manualData.player1Name} onChange={e => setManualData({...manualData, player1Name: e.target.value})} placeholder="Player 1" required />
+            <input value={manualData.player2Name} onChange={e => setManualData({...manualData, player2Name: e.target.value})} placeholder="Player 2" required />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <label>Date</label>
-              <input type="date" value={manualData.date} onChange={e => setManualData({...manualData, date: e.target.value})} required />
-            </div>
-            <div>
-              <label>Winner</label>
-              <select value={manualData.winner} onChange={e => setManualData({...manualData, winner: e.target.value})}>
-                <option value={1}>Player 1</option>
-                <option value={2}>Player 2</option>
-              </select>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <input type="date" value={manualData.date} onChange={e => setManualData({...manualData, date: e.target.value})} required />
+            <select value={manualData.surface} onChange={e => setManualData({...manualData, surface: e.target.value})}>
+              <option value="Clay">Clay</option>
+              <option value="Hard">Hard</option>
+              <option value="Grass">Grass</option>
+            </select>
           </div>
-          <label>Scores (format: "6-4 4-6 7-6")</label>
-          <input value={manualData.scores} onChange={e => setManualData({...manualData, scores: e.target.value})} placeholder="6-4 6-2" required />
-          <button type="submit" className="btn btn-primary btn-block">Save Match</button>
+          <input value={manualData.scores} onChange={e => setManualData({...manualData, scores: e.target.value})} placeholder="Scores (e.g. 6-4 6-2)" required />
+          <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '1rem' }}>Save Match</button>
         </form>
       )}
 
       {matches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-          <History size={48} color="var(--text-muted)" style={{ margin: '0 auto 1rem' }} />
-          <h3 style={{ color: 'var(--text-muted)' }}>No matches recorded yet</h3>
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <History size={48} color="#ccc" style={{ margin: '0 auto 1rem' }} />
+          <p style={{ color: '#888' }}>No matches recorded</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {matches.map((match, i) => {
-            const { config, sets, winner, stats, date } = match;
-            const matchDate = new Date(date).toLocaleDateString(undefined, {
-              year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-
-            return (
-              <div key={i} className="card" style={{ backgroundColor: 'var(--bg-dark)', padding: '1rem', border: '1px solid var(--border)', marginBottom: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>{matchDate}</span>
-                  <button onClick={() => deleteMatch(i)} style={{ background: 'none', border: '1px solid var(--danger)', borderRadius: '0.25rem', padding: '0.25rem 0.5rem', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem' }}>
-                    <Trash2 size={14} /> Delete
-                  </button>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  {winner === 1 && <Trophy size={16} color="var(--primary)" style={{ marginRight: '0.5rem' }} />}
-                  <span style={{ fontWeight: winner === 1 ? 'bold' : 'normal', color: winner === 1 ? 'var(--primary)' : 'inherit' }}>
-                    {config.player1Name}
-                  </span>
-                  <span style={{ margin: '0 0.5rem', color: 'var(--text-muted)' }}>vs</span>
-                  <span style={{ fontWeight: winner === 2 ? 'bold' : 'normal', color: winner === 2 ? 'var(--primary)' : 'inherit' }}>
-                    {config.player2Name}
-                  </span>
-                  {winner === 2 && <Trophy size={16} color="var(--primary)" style={{ marginLeft: '0.5rem' }} />}
-                </div>
-
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{config.player1Name}</span>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      {sets.map((set, setIndex) => (
-                        <span key={setIndex} style={{ fontWeight: set.player1 > set.player2 ? 'bold' : 'normal' }}>{set.player1}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{config.player2Name}</span>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      {sets.map((set, setIndex) => (
-                        <span key={setIndex} style={{ fontWeight: set.player2 > set.player1 ? 'bold' : 'normal' }}>{set.player2}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {stats && (
-                  <div style={{ marginTop: '1rem', fontSize: '0.875rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', color: 'var(--text-muted)' }}>
-                    <div>W: {stats.player1.winners} / UE: {stats.player1.unforcedErrors}</div>
-                    <div style={{ textAlign: 'right' }}>W: {stats.player2.winners} / UE: {stats.player2.unforcedErrors}</div>
-                  </div>
-                )}
-              </div>
-            );
-          }).reverse()}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {matches.map((match, i) => (
+            <MatchCard key={i} match={match} index={i} />
+          )).reverse()}
         </div>
       )}
     </div>
@@ -189,3 +203,4 @@ const MatchHistory = ({ onBack }) => {
 };
 
 export default MatchHistory;
+
